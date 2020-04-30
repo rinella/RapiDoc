@@ -45,19 +45,25 @@ function updateOAuthKey(apiKeyId, tokenType = 'Bearer', accessToken) {
 
 /* eslint-disable no-console */
 // Gets Access-Token in exchange of Authorization Code
-async function fetchAccessToken(tokenUrl, clientId, clientSecret, redirectUrl, grantType, authCode, apiKeyId, authFlowDivEl) {
+async function fetchAccessToken(tokenUrl, clientId, clientSecret, redirectUrl, grantType, authCode, sendClientSecretIn = 'header', apiKeyId, authFlowDivEl) {
   const respDisplayEl = authFlowDivEl ? authFlowDivEl.querySelector('.oauth-resp-display') : undefined;
   const urlFormParams = new URLSearchParams();
+  const headers = new Headers();
+
+  urlFormParams.append('redirect_uri', redirectUrl);
   urlFormParams.append('grant_type', grantType);
   if (authCode) {
     urlFormParams.append('code', authCode);
   }
-  urlFormParams.append('client_id', clientId);
-  urlFormParams.append('client_secret', clientSecret);
-  urlFormParams.append('redirect_uri', redirectUrl);
+  if (sendClientSecretIn === 'header') {
+    headers.set('Authorization', `Basic ${btoa(`${clientId}:${clientSecret}`)}`);
+  } else {
+    urlFormParams.append('client_id', clientId);
+    urlFormParams.append('client_secret', clientSecret);
+  }
 
   try {
-    const resp = await fetch(tokenUrl, { method: 'POST', body: urlFormParams });
+    const resp = await fetch(tokenUrl, { method: 'POST', headers, body: urlFormParams });
     const tokenResp = await resp.json();
     if (resp.ok) {
       if (tokenResp.token_type && tokenResp.access_token) {
@@ -82,7 +88,7 @@ async function fetchAccessToken(tokenUrl, clientId, clientSecret, redirectUrl, g
 }
 
 // Gets invoked when it receives the Authorization Code from the other window via message-event
-async function onWindowMessageEvent(msgEvent, winObj, tokenUrl, clientId, clientSecret, redirectUrl, grantType, apiKeyId, authFlowDivEl) {
+async function onWindowMessageEvent(msgEvent, winObj, tokenUrl, clientId, clientSecret, redirectUrl, grantType, sendClientSecretIn, apiKeyId, authFlowDivEl) {
   sessionStorage.removeItem('winMessageEventActive');
   winObj.close();
   if (msgEvent.data.fake) {
@@ -97,7 +103,7 @@ async function onWindowMessageEvent(msgEvent, winObj, tokenUrl, clientId, client
   if (msgEvent.data) {
     if (msgEvent.data.responseType === 'code') {
       // Authorization Code flow
-      fetchAccessToken.call(this, tokenUrl, clientId, clientSecret, redirectUrl, grantType, msgEvent.data.code, apiKeyId, authFlowDivEl);
+      fetchAccessToken.call(this, tokenUrl, clientId, clientSecret, redirectUrl, grantType, msgEvent.data.code, sendClientSecretIn, apiKeyId, authFlowDivEl);
     } else if (msgEvent.data.responseType === 'token') {
       // Implicit
       await this.refreshSpecWithToken(apiKeyId, msgEvent);
@@ -110,6 +116,8 @@ async function onInvokeOAuthFlow(apiKeyId, flowType, authUrl, tokenUrl, e) {
   const authFlowDivEl = e.target.closest('.oauth-flow');
   const clientId = authFlowDivEl.querySelector('.oauth-client-id') ? authFlowDivEl.querySelector('.oauth-client-id').value.trim() : '';
   const clientSecret = authFlowDivEl.querySelector('.oauth-client-secret') ? authFlowDivEl.querySelector('.oauth-client-secret').value.trim() : '';
+  const sendClientSecretIn = authFlowDivEl.querySelector('.oauth-send-client-secret-in') ? authFlowDivEl.querySelector('.oauth-send-client-secret-in').value.trim() : 'header';
+
   const checkedScopeEls = [...authFlowDivEl.querySelectorAll('input[type="checkbox"]:checked')];
   const state = (`${Math.random().toString(36)}random`).slice(2, 9);
   const redirectUrlObj = new URL(`${window.location.origin}${window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'))}/${this.oauthReceiver}`);
@@ -152,14 +160,14 @@ async function onInvokeOAuthFlow(apiKeyId, flowType, authUrl, tokenUrl, e) {
         sessionStorage.setItem('winMessageEventActive', 'true');
         window.addEventListener(
           'message',
-          (msgEvent) => onWindowMessageEvent.call(this, msgEvent, newWindow, tokenUrl, clientId, clientSecret, redirectUrlObj.toString(), grantType, apiKeyId, authFlowDivEl),
+          (msgEvent) => onWindowMessageEvent.call(this, msgEvent, newWindow, tokenUrl, clientId, clientSecret, redirectUrlObj.toString(), grantType, sendClientSecretIn, apiKeyId, authFlowDivEl),
           { once: true },
         );
       }
     }, 10);
   } else if (flowType === 'clientCredentials') {
     grantType = 'client_credentials';
-    fetchAccessToken.call(this, tokenUrl, clientId, clientSecret, redirectUrlObj.toString(), grantType, '', apiKeyId, authFlowDivEl);
+    fetchAccessToken.call(this, tokenUrl, clientId, clientSecret, redirectUrlObj.toString(), grantType, '', sendClientSecretIn, apiKeyId, authFlowDivEl);
   }
 }
 /* eslint-enable no-console */
@@ -167,7 +175,6 @@ async function onInvokeOAuthFlow(apiKeyId, flowType, authUrl, tokenUrl, e) {
 /* eslint-disable indent */
 
 function oAuthFlowTemplate(flowName, clientId, clientSecret, apiKeyId, authFlow) {
-  let authSite = '';
   let flowNameDisplay;
   if (flowName === 'authorizationCode') {
     flowNameDisplay = 'Authorization Code Flow';
@@ -179,11 +186,6 @@ function oAuthFlowTemplate(flowName, clientId, clientSecret, apiKeyId, authFlow)
     flowNameDisplay = 'Password Flow';
   } else {
     flowNameDisplay = flowName;
-  }
-  try {
-    authSite = new URL(authFlow.authorizationUrl).origin;
-  } catch (e) {
-    authSite = authFlow.authorizationUrl;
   }
   return html`
     <div class="oauth-flow" style="padding: 10px 0; margin-bottom:10px;"> 
@@ -223,14 +225,22 @@ function oAuthFlowTemplate(flowName, clientId, clientSecret, apiKeyId, authFlow)
             <input type="text" value = "${clientId}" placeholder="client-id" spellcheck="false" class="oauth-client-id">
             ${flowName === 'authorizationCode' || flowName === 'clientCredentials' || flowName === 'password'
               ? html`
-                <input type="password" value = "${clientSecret}" placeholder="client-secret" spellcheck="false" class="oauth-client-secret" style = "margin:0 5px;">`
+                <input type="password" value = "${clientSecret}" placeholder="client-secret" spellcheck="false" class="oauth-client-secret" style = "margin:0 5px;">
+                ${flowName === 'authorizationCode' || flowName === 'clientCredentials'
+                  ? html`
+                    <select style="margin-right:5px;" class="oauth-send-client-secret-in">
+                      <option value = 'header' selected> Authorization Header </option> 
+                      <option value = 'request-body'> Request Body </option> 
+                    </select>`
+                  : ''
+                }`
               : html`<div style='width:5px'></div>`
             }
             ${flowName === 'authorizationCode' || flowName === 'clientCredentials' || flowName === 'implicit'
               ? html`
                 <button class="m-btn thin-border"
                   @click="${(e) => { onInvokeOAuthFlow.call(this, apiKeyId, flowName, authFlow.authorizationUrl, authFlow.tokenUrl, e); }}"
-                > AUTHORIZE </button>`
+                > GET TOKEN </button>`
               : ''
             }
           </div>
@@ -243,30 +253,6 @@ function oAuthFlowTemplate(flowName, clientId, clientSecret, apiKeyId, authFlow)
             : ''
           }  
           <div class="oauth-resp-display red-text small-font-size"></div>
-          <!--
-          <div style="margin-top:8px">
-            <ul>
-              ${authFlow.authorizationUrl
-                ? html`
-                  <li> Register this client (<span class="mono-font">${window.location.origin}</span>) with <span class="mono-font">${authSite}<span class="mono-font"> </li>
-              <li> During registration, Specify redirect url pointing to <span class="mono-font">${window.location.origin}${window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'))}/${this.oauthReceiver}</span> </li>
-                  <li> Create <b>${this.oauthReceiver}</b> which will receive auth-code from oAuth provider</li>
-                  <li> <b>${this.oauthReceiver}</b> should contain custom-element <span class="mono-font"> &lt;oauth-receiver&gt; </span>, this element receives the auth-code and passes it to this document </li>
-                  <li> After receiving auth-code, it will request access-token using <span class="mono-font"> POST ${authFlow.tokenUrl}</span>
-                    <ul>
-                      <li> grant_type = 'authorization_code'</li>
-                      <li> code = {auth-code}</li>
-                      <li> client_id = {client-id}</li>
-                      <li> client_secret = {client-secret}</li>
-                      <li> redirect_uri = {redirect-url}</li>
-                    </ul>
-                  </li>
-                `
-                : ''
-              }
-            </ul>
-          </div>
-          -->
           `
         : ''
       }
@@ -296,7 +282,7 @@ export default function securitySchemeTemplate() {
             <tr>  
               <td style="max-width:500px; overflow-wrap: break-word;">
                 <div style="min-height:24px"> 
-                  <span style="font-weight:bold">${v.type}: ${v.scheme} </span> 
+                  <span style="font-weight:bold">${v.typeDisplay} </span> 
                   ${v.finalKeyValue
                     ? html`
                       <span class='blue-text'>  ${v.finalKeyValue ? 'Key Applied' : ''} </span> 
@@ -361,4 +347,89 @@ export default function securitySchemeTemplate() {
   </div>
 `;
 }
+
+export function pathSecurityTemplate(pathSecurity) {
+  if (this.resolvedSpec.securitySchemes && pathSecurity) {
+    const andSecurityKeys = [];
+    pathSecurity.forEach((pSecurity) => {
+      const orSecurityKeys = [];
+      const orKeyTypes = [];
+      let pathScopes = '';
+      Object.keys(pSecurity).forEach((pathSecurityKey) => {
+        const s = this.resolvedSpec.securitySchemes.find((ss) => ss.apiKeyId === pathSecurityKey);
+        if (!pathScopes) {
+          pathScopes = pSecurity[pathSecurityKey].join(', ');
+        }
+        if (s) {
+          orKeyTypes.push(s.typeDisplay);
+          orSecurityKeys.push(s);
+        }
+      });
+      andSecurityKeys.push({
+        pathScopes,
+        securityTypes: orKeyTypes.join(' or '),
+        securityDefs: orSecurityKeys,
+      });
+    });
+    return html`<div style="position:absolute; top:3px; right:2px; font-size: calc(var(--font-size-small));">
+      <div style="position:relative; display:flex; min-width:350px; max-width:700px; justify-content: flex-end;">
+        <div style="font-size: calc(var(--font-size-small) + 2px)"> &#128274; </div>
+          ${andSecurityKeys.map((andSecurityItem) => html`
+          <div class="tooltip">
+            <div style = "padding:2px 4px;"> ${andSecurityItem.securityTypes} </div>
+            <div class="tooltip-text" style="position:absolute; color: var(--fg); top:26px; right:0; border:1px solid var(--border-color);padding:2px 4px; display:block;">
+              ${andSecurityItem.securityDefs.length > 1 ? html`<div>Requires <b>any one</b> of the following </div>` : ''}
+              <div style="padding-left: 8px">
+                ${andSecurityItem.securityDefs.map((orSecurityItem, i) => html`
+                  ${orSecurityItem.type === 'oauth2'
+                    ? html`
+                      <div>
+                        ${andSecurityItem.securityDefs.length > 1 ? html`<b>${i + 1}.</b> &nbsp;` : html`Requires`}
+                        OAuth Access Token in <b>Authorization header</b> with <b>Scopes:</b> ${andSecurityItem.pathScopes}
+                      </div>`
+                    : orSecurityItem.type === 'http'
+                      ? html`
+                        <div>
+                          ${andSecurityItem.securityDefs.length > 1 ? html`<b>${i + 1}.</b> &nbsp;` : html`Requires`} 
+                          ${orSecurityItem.scheme === 'basic' ? 'Base 64 encoded username:password' : 'Bearer Token'} in <b>Authorization header</b>
+                        </div>`
+                      : html`
+                        <div>
+                          ${andSecurityItem.securityDefs.length > 1 ? html`<b>${i + 1}.</b> &nbsp;` : html`Requires`} 
+                          Token in <b>${orSecurityItem.name} ${orSecurityItem.in}</b>
+                        </div>`
+                  }
+                `)}
+              </div>  
+            </div>
+          </div>  
+        `)
+        }
+      </div>
+    `;
+
+    /*
+    return html`<div style="position:absolute; top:3px; right:2px; font-size: calc(var(--font-size-small));">
+      <div style="position:relative; display:flex;">
+        <div style="font-size: calc(var(--font-size-small) + 2px)"> &#128274; </div>
+          ${pathSecurityDefs.map((v) => html`
+          <div class="tooltip">
+            <div style = "padding:2px 4px;"> ${v.securityScheme.typeDisplay} </div>
+            ${v.securityScheme.type === 'oauth2'
+              ? html`
+                <div class="tooltip-text" style="position:absolute; color: var(--fg); top:28px; right:0; border:1px solid var(--border-color);padding:2px 4px; min-width:100px; max-width:400px; display:inline-flex;">
+                  <b>Scopes:</b> &nbsp; ${v.scopes.join(', ')}
+                </div>`
+              : ''
+            }
+          </div>
+        `)
+        }
+      </div>
+      `;
+    */
+  }
+  return '';
+}
+
 /* eslint-enable indent */

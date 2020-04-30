@@ -12,7 +12,6 @@ export default async function ProcessSpec(specUrl, sortTags = false, sortEndpoin
   // let resolveOptions;
   // const specLocation = '';
   // let url;
-  console.log(`Key Value: ${attrApiKeyValue}`);
 
   const convertOptions = {
     patch: true,

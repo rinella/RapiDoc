@@ -24,6 +24,7 @@ export default class ApiRequest extends LitElement {
     this.responseHeaders = '';
     this.responseText = '';
     this.responseUrl = '';
+    this.base64Image = '';
     this.curlSyntax = '';
     this.activeResponseTab = 'response'; // allowed values: response, headers, curl
     this.selectedRequestBodyType = '';
@@ -47,6 +48,7 @@ export default class ApiRequest extends LitElement {
       responseHeaders: { type: String, attribute: false },
       responseStatus: { type: String, attribute: false },
       responseUrl: { type: String, attribute: false },
+      base64Image: { type: String, attribute: false },
       allowTry: { type: String, attribute: 'allow-try' },
       renderStyle: { type: String, attribute: 'render-style' },
       schemaStyle: { type: String, attribute: 'schema-style' },
@@ -644,7 +646,52 @@ export default class ApiRequest extends LitElement {
       </div>
       <button class="m-btn primary" @click="${this.onTryClick}">TRY</button>
     </div>
+<<<<<<< HEAD
     ${this.responseMessage === '' ? '' : this.apiResponseTabTemplate()}
+=======
+    ${this.responseMessage === ''
+      ? ''
+      : html`
+        <div class="row" style="font-size:var(--font-size-small); margin:5px 0">
+          <div class="response-message ${this.responseStatus}">Response Status: ${this.responseMessage}</div>
+          <div style="flex:1"></div>
+          <button class="m-btn" style="padding: 6px 0px;width:60px" @click="${this.clearResponseData}">CLEAR</button>
+        </div>
+        <div class="tab-panel col" style="border-width:0 0 1px 0;">
+          <div id="tab_buttons" class="tab-buttons row" @click="${(e) => { this.activeResponseTab = e.target.dataset.tab; }}">
+            <button class="tab-btn ${this.activeResponseTab === 'response' ? 'active' : ''}" data-tab = 'response' > RESPONSE</button>
+            <button class="tab-btn ${this.activeResponseTab === 'headers' ? 'active' : ''}"  data-tab = 'headers' > RESPONSE HEADERS</button>
+            <button class="tab-btn ${this.activeResponseTab === 'curl' ? 'active' : ''}" data-tab = 'curl'>CURL</button>
+          </div>
+          <div class="tab-content col" style="flex:1; display:${this.activeResponseTab === 'response' ? 'flex' : 'none'};">
+            ${this.responseIsBlob
+              ? html`
+                <div style="margin:10px 2px"> 
+                  <button class="m-btn" @click="${this.downloadResponseBlob}">DOWNLOAD</button>
+                </div>`
+              : html`
+                <div class="m-markdown">
+                  ${this.responseHeaders.includes('image/png')
+                  ? html`<img style="margin:10px 2px" src="data:image/png;base64,${this.base64Image}" />`
+                    : this.responseHeaders.includes('application/json')
+                      ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-json">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.json, 'json'))}</code></pre>`
+                      : this.responseHeaders.includes('application/xml')
+                        ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-xml">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.xml, 'xml'))}</code></pre>`
+                        : html`<pre style="white-space:pre; max-height:400px; overflow:scroll">${this.responseText}</pre>`
+                    }
+                </div>`
+            }
+          </div>
+          <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'headers' ? 'flex' : 'none'};" >
+            <pre style="white-space:pre"><code lang="shell"> ${unsafeHTML(Prism.highlight(this.responseHeaders, Prism.languages.yaml, 'yaml'))}</code></pre>
+          </div>
+          <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'curl' ? 'flex' : 'none'};">
+            <pre style="white-space:pre" ><code lang="shell"> ${unsafeHTML(Prism.highlight(this.curlSyntax.trim().replace(/\\$/, ''), Prism.languages.shell, 'shell'))}</code></pre>
+          </div>
+        </div>`
+      }
+      <slot style="display:block"></slot>
+>>>>>>> DisplayImage
     `;
   }
   /* eslint-enable indent */
@@ -901,6 +948,16 @@ export default class ApiRequest extends LitElement {
         if (contentType.includes('json')) {
           resp.json().then((respObj) => {
             me.responseText = JSON.stringify(respObj, null, 2);
+          });
+        } else if (contentType.includes('image')) {
+          resp.arrayBuffer().then((respArrayBuffer) => {
+            let binary = '';
+            const bytes = new Uint8Array(respArrayBuffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            me.base64Image = btoa(binary);
           });
         } else if (contentType.includes('octet-stream')) {
           me.responseIsBlob = true;

@@ -558,7 +558,6 @@ export default class ApiRequest extends LitElement {
   }
 
   apiResponseTabTemplate() {
-    const responseFormat = this.responseHeaders.includes('json') ? 'json' : (this.responseHeaders.includes('html') || this.responseHeaders.includes('xml')) ? 'html' : '';
     return html`
       <div class="row" style="font-size:var(--font-size-small); margin:5px 0">
         <div class="response-message ${this.responseStatus}">Response Status: ${this.responseMessage}</div>
@@ -574,21 +573,25 @@ export default class ApiRequest extends LitElement {
           <button class="tab-btn ${this.activeResponseTab === 'headers' ? 'active' : ''}"  data-tab = 'headers' > RESPONSE HEADERS</button>
           <button class="tab-btn ${this.activeResponseTab === 'curl' ? 'active' : ''}" data-tab = 'curl'>CURL</button>
         </div>
+        <div class="tab-content col" style="flex:1; display:${this.activeResponseTab === 'response' ? 'flex' : 'none'};">
         ${this.responseIsBlob
           ? html`
-            <div class="tab-content col" style="flex:1; display:${this.activeResponseTab === 'response' ? 'flex' : 'none'};">
+            <div style="margin:10px 2px"> 
               <button class="m-btn" @click="${this.downloadResponseBlob}">DOWNLOAD</button>
             </div>`
           : html`
-            <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'response' ? 'flex' : 'none'};" >
-              <button class="toolbar-btn" style = "position:absolute; top:12px; right:2px" @click='${(e) => { copyToClipboard(this.responseText, e); }}'> Copy </button>
-              <pre style="white-space:pre; max-height:400px; overflow:auto">${responseFormat
-                ? html`<code>${unsafeHTML(Prism.highlight(this.responseText, Prism.languages[responseFormat], responseFormat))}</code>`
-                : `${this.responseText}`
-              }
-              </pre>
+            <div class="m-markdown">
+              ${this.responseHeaders.includes('image/png')
+              ? html`<img style="margin:10px 2px" src="data:image/png;base64,${this.base64Image}" />`
+                : this.responseHeaders.includes('application/json')
+                  ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-json">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.json, 'json'))}</code></pre>`
+                  : this.responseHeaders.includes('application/xml')
+                    ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-xml">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.xml, 'xml'))}</code></pre>`
+                    : html`<pre style="white-space:pre; max-height:400px; overflow:scroll">${this.responseText}</pre>`
+                }
             </div>`
         }
+      </div>
         <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'headers' ? 'flex' : 'none'};" >
           <button  class="toolbar-btn" style = "position:absolute; top:12px; right:2px" @click='${(e) => { copyToClipboard(this.responseHeaders, e); }}'> Copy </button>
           <pre style="white-space:pre"><code>${unsafeHTML(Prism.highlight(this.responseHeaders, Prism.languages.css, 'css'))}</code></pre>
@@ -646,52 +649,7 @@ export default class ApiRequest extends LitElement {
       </div>
       <button class="m-btn primary" @click="${this.onTryClick}">TRY</button>
     </div>
-<<<<<<< HEAD
     ${this.responseMessage === '' ? '' : this.apiResponseTabTemplate()}
-=======
-    ${this.responseMessage === ''
-      ? ''
-      : html`
-        <div class="row" style="font-size:var(--font-size-small); margin:5px 0">
-          <div class="response-message ${this.responseStatus}">Response Status: ${this.responseMessage}</div>
-          <div style="flex:1"></div>
-          <button class="m-btn" style="padding: 6px 0px;width:60px" @click="${this.clearResponseData}">CLEAR</button>
-        </div>
-        <div class="tab-panel col" style="border-width:0 0 1px 0;">
-          <div id="tab_buttons" class="tab-buttons row" @click="${(e) => { this.activeResponseTab = e.target.dataset.tab; }}">
-            <button class="tab-btn ${this.activeResponseTab === 'response' ? 'active' : ''}" data-tab = 'response' > RESPONSE</button>
-            <button class="tab-btn ${this.activeResponseTab === 'headers' ? 'active' : ''}"  data-tab = 'headers' > RESPONSE HEADERS</button>
-            <button class="tab-btn ${this.activeResponseTab === 'curl' ? 'active' : ''}" data-tab = 'curl'>CURL</button>
-          </div>
-          <div class="tab-content col" style="flex:1; display:${this.activeResponseTab === 'response' ? 'flex' : 'none'};">
-            ${this.responseIsBlob
-              ? html`
-                <div style="margin:10px 2px"> 
-                  <button class="m-btn" @click="${this.downloadResponseBlob}">DOWNLOAD</button>
-                </div>`
-              : html`
-                <div class="m-markdown">
-                  ${this.responseHeaders.includes('image/png')
-                  ? html`<img style="margin:10px 2px" src="data:image/png;base64,${this.base64Image}" />`
-                    : this.responseHeaders.includes('application/json')
-                      ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-json">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.json, 'json'))}</code></pre>`
-                      : this.responseHeaders.includes('application/xml')
-                        ? html`<pre style="white-space:pre; max-height:400px; overflow:scroll"><code class = "language-xml">${unsafeHTML(Prism.highlight(this.responseText, Prism.languages.xml, 'xml'))}</code></pre>`
-                        : html`<pre style="white-space:pre; max-height:400px; overflow:scroll">${this.responseText}</pre>`
-                    }
-                </div>`
-            }
-          </div>
-          <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'headers' ? 'flex' : 'none'};" >
-            <pre style="white-space:pre"><code lang="shell"> ${unsafeHTML(Prism.highlight(this.responseHeaders, Prism.languages.yaml, 'yaml'))}</code></pre>
-          </div>
-          <div class="tab-content col m-markdown" style="flex:1;display:${this.activeResponseTab === 'curl' ? 'flex' : 'none'};">
-            <pre style="white-space:pre" ><code lang="shell"> ${unsafeHTML(Prism.highlight(this.curlSyntax.trim().replace(/\\$/, ''), Prism.languages.shell, 'shell'))}</code></pre>
-          </div>
-        </div>`
-      }
-      <slot style="display:block"></slot>
->>>>>>> DisplayImage
     `;
   }
   /* eslint-enable indent */
